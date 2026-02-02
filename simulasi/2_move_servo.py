@@ -4,7 +4,9 @@ import time
 # --- SETUP KONEKSI ---
 # === Connect SITL ===
 print("Menghubungkan ke SITL...")
-connection = mavutil.mavlink_connection('udp:127.0.0.1:14550')
+# connection = mavutil.mavlink_connection('udp:127.0.0.1:14550')
+# connection = mavutil.mavlink_connection('/dev/ttyACM0', baud=115200)
+connection = mavutil.mavlink_connection('COM7', baud=115200)
 
 # Tunggu Heartbeat
 connection.wait_heartbeat()
