@@ -1,9 +1,15 @@
 from pymavlink import mavutil
 import time
 
-# === SETUP KONEKSI SITL ===
-print("Menghubungkan ke SITL...")
-connection = mavutil.mavlink_connection('udp:127.0.0.1:14550')
+# --- KONFIGURASI KONEKSI ---
+# Karena kita pake SITL di port tambahan 14551
+# Format: udpin:IP:PORT
+connection_string = 'udpin:127.0.0.1:14551'
+
+print("Menghubungkan ke simulator...")
+
+# Start Koneksi
+connection = mavutil.mavlink_connection(connection_string)
 
 # === TUNGGU HEARTBEAT ===
 print("Menunggu heartbeat dari pesawat...")
