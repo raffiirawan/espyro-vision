@@ -1,22 +1,25 @@
 import cv2
 import json
 import numpy as np
-import platform
 
 # --- KONFIGURASI MISI ---
 # True = Tampilkan jendela video (Berat, pakai saat testing di Laptop)
 # False = Headless mode (Ringan, pakai saat Raspi terbang)
 SHOW_VIDEO = True 
+FRAME_WIDTH = 640
+FRAME_HEIGHT = 480
+CENTER_X_SCREEN = int(FRAME_WIDTH / 2)
+CENTER_Y_SCREEN = int(FRAME_HEIGHT / 2)
 
-# Daftar Model yang mau dipakai
+# --- LOAD MODEL (Sesuaikan path json kamu) ---
+# Pastikan file json ada, atau kode ini error.
+# Kalau mau tes tanpa json, bisa hardcode array-nya manual.
 MODEL_FILES = {
-    "Blue": "models/blue_model.json",
+    "Blue": "models/blue_model.json",   # Aktifkan kalau butuh
     "Orange": "models/orange_model.json"
 }
 
-# --- LOAD SEMUA MODEL ---
 loaded_models = {}
-print("Loading Models...")
 for name, path in MODEL_FILES.items():
     try:
         with open(path, "r") as f:
@@ -25,96 +28,72 @@ for name, path in MODEL_FILES.items():
                 "lower": np.array(data["lower"]),
                 "upper": np.array(data["upper"])
             }
-        print(f"    {name} Siap!")
-    except Exception as e:
-        print(f"    {name} Gagal load: {e}")
+        print(f"✅ {name} Loaded.")
+    except:
+        print(f"❌ {name} Error/Not Found.")
 
-if not loaded_models:
-    print("Tidak ada model yang dimuat. Keluar.")
-    exit()
-
-# --- SETUP KAMERA ---
+# --- KAMERA ---
 cap = cv2.VideoCapture(0)
-# Set resolusi standar biar tidak terlalu berat
-cap.set(3, 640) 
-cap.set(4, 480)
+cap.set(3, FRAME_WIDTH) 
+cap.set(4, FRAME_HEIGHT)
 
-print("\nProgram Berjalan! Tekan 'q' untuk keluar.")
+print("Mulai Deteksi... Tekan 'q' stop.")
 
 while True:
     ret, frame = cap.read()
     if not ret: break
 
-    # Pre-processing (Blur dikit biar noise berkurang)
+    # Blur & HSV
     blurred = cv2.GaussianBlur(frame, (11, 11), 0)
     hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
     
-    # Kanvas Hitam untuk "Penglihatan Robot" (Mask Gabungan)
-    # Ukurannya sama dengan frame, tapi cuma 1 channel (Hitam Putih)
-    combined_mask = np.zeros(frame.shape[:2], dtype="uint8")
-    
-    status_text = ""
+    detection_info = "No Target"
 
-    # --- LOOPING CEK SETIAP WARNA ---
     for name, model in loaded_models.items():
-        
-        # 1. Buat Masking untuk warna spesifik ini
+        # Masking
         mask = cv2.inRange(hsv, model["lower"], model["upper"])
-        
-        # Bersihkan noise (Erode & Dilate)
         mask = cv2.erode(mask, None, iterations=2)
         mask = cv2.dilate(mask, None, iterations=2)
         
-        # 2. GABUNGKAN MASK (PENTING!)
-        # Kita tumpuk mask Biru & Oranye ke dalam satu layar 'combined_mask'
-        # Logika OR: Kalau pixel ini putih di mask Biru ATAU putih di mask Oranye, jadikan putih.
-        combined_mask = cv2.bitwise_or(combined_mask, mask)
-        
-        # 3. Cari Kontur untuk menggambar kotak di Layar Real
+        # Cari Kontur
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
         if len(contours) > 0:
-            # Ambil objek terbesar
+            # Ambil yang terbesar (Target Utama)
             c = max(contours, key=cv2.contourArea)
             area = cv2.contourArea(c)
             
-            # Filter ukuran minimum biar gak deteksi semut
-            if area > 500: 
+            if area > 1000: # Filter noise
+                # DAPATKAN KOTAK PEMBUNGKUS
                 x, y, w, h = cv2.boundingRect(c)
                 
-                # Tentukan warna kotak berdasarkan target
-                # Jika Biru -> Kotak Merah, Jika Orange -> Kotak Biru (Biar kontras)
-                box_color = (0, 0, 255) if name == "Blue" else (255, 165, 0)
+                # --- RUMUS MENCARI TITIK TENGAH (PENTING!) ---
+                cx = int(x + (w / 2))
+                cy = int(y + (h / 2))
                 
-                cv2.rectangle(frame, (x, y), (x+w, y+h), box_color, 2)
-                cv2.putText(frame, name, (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, box_color, 2)
+                # Visualisasi Kotak
+                cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
                 
-                status_text += f"[{name}: DETECTED] "
+                # Visualisasi Titik Tengah (Dot Merah)
+                cv2.circle(frame, (cx, cy), 5, (0, 0, 255), -1)
+                
+                # Visualisasi Garis ke Tengah Layar (Optional, biar kayak sniper)
+                cv2.line(frame, (CENTER_X_SCREEN, CENTER_Y_SCREEN), (cx, cy), (255, 0, 0), 1)
 
-    if status_text == "":
-        status_text = "SEARCHING..."
+                # Simpan info untuk di-print
+                detection_info = f"TARGET: {name} | Posisi: X={cx}, Y={cy}"
 
-    # --- OUTPUT HANDLING ---
+    # Tampilkan Text Koordinat
+    cv2.putText(frame, detection_info, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+    
+    # Print ke terminal (Bakal dipakai logic drone nanti)
+    # Gunakan \r biar nge-replace baris yang sama
+    print(f"\r{detection_info:<50}", end="")
+
     if SHOW_VIDEO:
-        # Tampilkan Info Status di Layar Real
-        cv2.putText(frame, f"Status: {status_text}", (10, 30), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-
-        # KAMERA 1: REAL VIEW (Untuk Manusia)
-        cv2.imshow("Mata Robot (Real)", frame)
-        
-        # KAMERA 2: ROBOT VIEW (Untuk Debugging Algoritma)
-        # Ini menampilkan apa yang "dilihat" mesin (Putih = Target, Hitam = Abaikan)
-        cv2.imshow("Penglihatan Robot (Mask)", combined_mask)
-
-        # Tekan 'q' untuk keluar
+        cv2.imshow("Vision View", frame)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
-            
-    else:
-        # Mode Terbang (Headless)
-        # Gunakan \r agar teks tidak spam ke bawah
-        print(f"Status: {status_text}" + " " * 20, end='\r')
 
 cap.release()
 cv2.destroyAllWindows()
