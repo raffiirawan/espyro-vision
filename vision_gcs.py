@@ -24,7 +24,7 @@ def main():
     # --- 1. KONEKSI KE MAVLINK-ROUTER ---
     print(f"[INIT] Menghubungkan ke Pintu Virtual {CONNECTION_STRING}...")
     try:
-        # Kita pakai ID komponen 191 agar GCS tahu ini pesan dari Companion Comp    uter
+        # Kita pakai ID komponen 191 agar GCS tahu ini pesan dari Companion Computer
         master = mavutil.mavlink_connection(CONNECTION_STRING, source_system=1, source_component=191)
 
         # MAVLink via TCP/UDP butuh "pancingan" detak jantung
@@ -55,7 +55,7 @@ def main():
     # Mencegah Raspi nge-hang di frame pertama saat sedang terbang
     print("[INIT] Memanaskan Otak AI (Proses ini wajar, tunggu 10-60 detik)...")
     try:
-        dummy_frame = np.zeros((480, 640, 3), dtype=np.uint8) # Bikin gambar hit    am kosong
+        dummy_frame = np.zeros((480, 640, 3), dtype=np.uint8) # Bikin gambar hitam kosong
         model(dummy_frame, imgsz=416, device='cpu', verbose=False)
         print("[INIT] ✅ AI Selesai Pemanasan. Siap Tempur!")
     except Exception as e:
@@ -101,7 +101,7 @@ def main():
                 cls_id = int(best_box.cls[0])
                 class_name = model.names[cls_id]
 
-                # FITUR ANTI-SPAM (1 pesan per 3 detik via GSM agar bandwidth he    mat)
+                # FITUR ANTI-SPAM (1 pesan per 3 detik via GSM agar bandwidth hemat)
                 if time.time() - last_report_time > 3.0:
                     pesan = f"TARGET DETECTED: {class_name} ({conf:.2f})"
                     send_telemetry(pesan, 2) # Severity 2 = Merah/Kuning di MP
@@ -114,7 +114,7 @@ def main():
                 if cv2.waitKey(1) == ord('q'):
                     break
 
-            # Istirahatkan CPU sedikit agar suhu terjaga (sangat penting untuk R    aspi)
+            # Istirahatkan CPU sedikit agar suhu terjaga (sangat penting untuk Raspi)
             time.sleep(0.05)
 
     except KeyboardInterrupt:
