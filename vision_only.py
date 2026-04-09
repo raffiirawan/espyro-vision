@@ -16,7 +16,6 @@ MODEL_PATH = "models/ncnn-yolo11"
 
 CONF_THRESHOLD = 0.60
 CAMERA_INDEX = 0
-HEADLESS_MODE = True # Biarkan True untuk tes performa asli Raspi
 # =========================================================
 
 def main():
@@ -91,13 +90,6 @@ def main():
                 # Reset waktu untuk 30 frame berikutnya
                 start_time_benchmark = time.time()
 
-            # Tampilkan gambar jika tes pakai layar
-            # if not HEADLESS_MODE:
-            #     annotated_frame = results[0].plot()
-            #     cv2.putText(annotated_frame, f"FPS: {fps:.1f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-            #     cv2.imshow("Raspi View", annotated_frame)
-            #     if cv2.waitKey(1) == ord('q'):
-            #         break
 
             # Istirahatkan CPU (Dikecilkan jadi 0.01 detik agar tidak terlalu membatasi FPS maksimal)
             time.sleep(0.01)
@@ -107,8 +99,6 @@ def main():
     finally:
         print("[INFO] Membersihkan resource hardware...")
         vs.stop()
-        # if not HEADLESS_MODE:
-        #     cv2.destroyAllWindows()
         print("[INFO] Sistem Shutdown Mulus.")
 
 if __name__ == "__main__":
