@@ -8,11 +8,14 @@ import sys
 # ================= K O N F I G U R A S I =================
 # PILIH SALAH SATU MODEL UNTUK DI-TEST (Beri tanda # pada yang tidak dipakai)
 
-# OPSI 1: Menggunakan TFLite
-# MODEL_PATH = "models/terpal_416_int8.tflite"
+# OPSI 1: Menggunakan yolo11n
+MODEL_PATH = "models/terpal-yolo11_ncnn_model" 
 
-# OPSI 2: Menggunakan NCNN (Panggil nama foldernya secara utuh!)
-MODEL_PATH = "models/ncnn-yolo11"
+# OPSI 2: Menggunakan yolo11s
+MODEL_PATH = "models/yolo11s_ncnn_model"
+
+# OPSI 3: Menggunakan yolo11s + p2
+MODEL_PATH = "models/yolo11s_p2_ncnn_model"
 
 CONF_THRESHOLD = 0.60
 CAMERA_INDEX = 0
