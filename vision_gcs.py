@@ -10,13 +10,26 @@ import sys
 # KUNCI PERUBAHAN: Koneksi via TCP lokal ke MAVLink-Router
 CONNECTION_STRING = 'tcp:127.0.0.1:5760'
 
-# Path model INT8 yang super ringan
-MODEL_PATH = "models/terpal_416_int8.tflite"
+# Path model yolo11s tflite
+MODEL_PATH = "models/yolo11n_416_int8_update.tflite"
+
 CONF_THRESHOLD = 0.60
-CAMERA_INDEX = 0
+CAMERA_INDEX = "/dev/video99"
+#CAMERA_INDEX = 0
 
 HEADLESS_MODE = True # Wajib True kalau dijalankan tanpa monitor di Raspi
 # =========================================================
+
+# [UPDATE BARU] Fungsi pembaca sensor suhu hardware Raspi
+def get_cpu_temperature():
+    """Membaca suhu CPU Raspi langsung dari sensor hardware Linux"""
+    try:
+        with open("/sys/class/thermal/thermal_zone0/temp", "r") as f:
+            temp_str = f.read()
+        return float(temp_str) / 1000.0
+    except Exception as e:
+        print(f"[ERROR] Gagal membaca suhu: {e}")
+        return 0.0
 
 def main():
     print(">>> MEMULAI VISION VIA MAVLINK-ROUTER (DETEKSI & LAPOR) <<<")
@@ -30,7 +43,7 @@ def main():
         # MAVLink via TCP/UDP butuh "pancingan" detak jantung
         master.mav.heartbeat_send(mavutil.mavlink.MAV_TYPE_ONBOARD_CONTROLLER, mavutil.mavlink.MAV_AUTOPILOT_INVALID, 0, 0, 0)
         master.wait_heartbeat(timeout=5)
-        print(f"[INIT] ✅ TERHUBUNG ke Jaringan MAVLink!")
+        print(f"[INIT]  TERHUBUNG ke Jaringan MAVLink!")
     except Exception as e:
         print(f"[ERROR] Gagal Konek MAVLink: {e}")
         sys.exit()
@@ -48,16 +61,16 @@ def main():
     try:
         model = YOLO(MODEL_PATH)
     except Exception as e:
-        print(f"GAGAL LOAD MODEL AI! Pastikan file ada di folder models/. Error:{e}")
+        print(f"GAGAL LOAD MODEL AI! Pastikan file ada di folder models/. Error: {e}")
         sys.exit()
 
-    # [UPDATE BARU] TRIK WARM-UP AI (PEMANASAN CPU)
+    # TRIK WARM-UP AI (PEMANASAN CPU)
     # Mencegah Raspi nge-hang di frame pertama saat sedang terbang
     print("[INIT] Memanaskan Otak AI (Proses ini wajar, tunggu 10-60 detik)...")
     try:
         dummy_frame = np.zeros((480, 640, 3), dtype=np.uint8) # Bikin gambar hitam kosong
         model(dummy_frame, imgsz=416, device='cpu', verbose=False)
-        print("[INIT] ✅ AI Selesai Pemanasan. Siap Tempur!")
+        print("[INIT]  AI Selesai Pemanasan. Siap Tempur!")
     except Exception as e:
         print(f"[ERROR] Pemanasan AI Gagal: {e}")
 
@@ -69,20 +82,24 @@ def main():
 
     # --- 3. LOOPING UTAMA ---
     last_report_time = 0
-    frame_count = 0 # [UPDATE BARU] Counter untuk debugging
+    frame_count = 0 
+    
+    # [UPDATE BARU] Variabel kontrol suhu
+    last_temp_time = 0      
+    TEMP_INTERVAL = 30.0    # Cek dan lapor suhu setiap 10 detik
 
     try:
         while True:
             # Baca frame
             frame = vs.read()
-
-            # [UPDATE BARU] Indikator jika kamera diam-diam terputus
+            
+            # Indikator jika kamera diam-diam terputus
             if frame is None:
-                print("⚠ WARNING: Frame kosong! Mengecek ulang kabel USB kamera...")
+                print("WARNING: Frame kosong! Mengecek ulang kabel USB kamera...")
                 time.sleep(1)
                 continue
 
-            # [UPDATE BARU] Tanda detak jantung program (muncul setiap 30 frame)
+            # Tanda detak jantung program (muncul setiap 30 frame)
             frame_count += 1
             if frame_count % 30 == 0:
                 print(f"[DEBUG] Loop AI berjalan lancar... (Telah memproses {frame_count} frame)")
@@ -107,6 +124,26 @@ def main():
                     send_telemetry(pesan, 2) # Severity 2 = Merah/Kuning di MP
                     last_report_time = time.time()
 
+            # =======================================================
+            # [UPDATE BARU] FITUR MONITORING SUHU SMART ALERT
+            # =======================================================
+            if time.time() - last_temp_time > TEMP_INTERVAL:
+                suhu = get_cpu_temperature()
+                
+                # Print log suhu di terminal SSH Raspi
+                print(f"[HW STATS] Suhu CPU Raspi: {suhu:.1f} °C")
+                
+                # Logic warna peringatan untuk Mission Planner
+                if suhu >= 80.0:
+                    send_telemetry(f"CRITICAL! RASPI OVERHEAT: {suhu:.1f}C", 2)
+                elif suhu >= 70.0:
+                    send_telemetry(f"WARNING! Raspi Hot: {suhu:.1f}C", 4)
+                else:
+                    send_telemetry(f"Sys Temp: {suhu:.1f}C", 6)
+                
+                last_temp_time = time.time()
+            # =======================================================
+
             # (Opsional) Tampilkan gambar jika tes darat pakai monitor
             if not HEADLESS_MODE:
                 annotated_frame = results[0].plot()
@@ -114,7 +151,7 @@ def main():
                 if cv2.waitKey(1) == ord('q'):
                     break
 
-            # Istirahatkan CPU sedikit agar suhu terjaga (sangat penting untuk Raspi)
+            # Istirahatkan CPU sedikit agar suhu terjaga
             time.sleep(0.05)
 
     except KeyboardInterrupt:
